@@ -1,4 +1,6 @@
 """
+ai_pipeline.py
+
 AI tracking pipeline -- ổn định target, hiển thị tất cả khuôn mặt đã đăng ký.
 """
 import os
@@ -171,26 +173,48 @@ class AIPipeline(threading.Thread):
         self.last_detect_ms = 0.0
         self.last_recognize_ms = 0.0
 
-    def _set_output(self, has_target, raw_bbox, smoothed_bbox, center):
+    def _set_output(self, has_target, raw_bbox, smoothed_bbox, center, drive_servo=True):
         with self._lock:
             self.has_target = has_target
             self.raw_bbox = raw_bbox
             self.smoothed_bbox = smoothed_bbox
             self.smoothed_center = center
-        self._drive_servo(has_target, center)
+        # drive_servo=False: dung cho cac frame "doan" (Kalman predict_only,
+        # xem _step_tracking) khong co bbox moi thuc su -- xem ghi chu trong
+        # _drive_servo() ve ly do KHONG duoc lai servo bang diem doan.
+        if drive_servo:
+            self._drive_servo(has_target, center, smoothed_bbox)
 
-    def _drive_servo(self, has_target, center):
+    def _drive_servo(self, has_target, center, box=None):
         if self.servo is None:
             return
 
-        if has_target and center is not None and self._last_frame_shape is not None:
+        if has_target and box is not None and self._last_frame_shape is not None:
             self._servo_lost_counter = 0
             self._servo_was_tracking = True
             h, w = self._last_frame_shape
             cx, cy = w / 2.0, h / 2.0
-            error_x = center[0] - cx
-            error_y = center[1] - cy
-            self.servo.update(error_x, error_y)
+
+            # QUAN TRONG: tinh sai so tu CHINH TAM O XANH (box) dang ve tren
+            # dashboard, KHONG dung diem Kalman (center) duoc truyen vao.
+            # Ly do: o cac frame "doan" (predict_only, xem _step_tracking
+            # khi TRACKING_SKIP_FRAMES > 0), diem Kalman se NGOAI SUY chay
+            # vuot len phia truoc trong khi self.target_bbox (o xanh that)
+            # dung yen -- neu dung diem do de tinh error thi servo se DUOI
+            # THEO MOT DIEM AO chay xa hon ca o xanh that, gay ra chay lo
+            # y het trieu chung "van bi" da gap. Dung tam box + gioi han
+            # duoi tinh servo NGAY tai day dam bao error va ranh gioi dung
+            # (dead-zone) LUON cung mot nguon du lieu, khong bao gio lech
+            # pha voi nhau.
+            bx1, by1, bx2, by2 = box
+            box_cx = (bx1 + bx2) / 2.0
+            box_cy = (by1 + by2) / 2.0
+            error_x = box_cx - cx
+            error_y = box_cy - cy
+            box_half_w = (bx2 - bx1) / 2.0
+            box_half_h = (by2 - by1) / 2.0
+
+            self.servo.update(error_x, error_y, box_half_w, box_half_h)
             return
 
         if self._servo_was_tracking:
@@ -401,7 +425,13 @@ class AIPipeline(threading.Thread):
             if self.target_center is not None and self.target_bbox is not None:
                 pred = self.kalman.predict_only()
                 if pred[0] is not None:
-                    self._set_output(True, self.target_bbox, self.target_bbox, pred)
+                    # drive_servo=False: day la diem NGOAI SUY (chua co
+                    # detect that o frame nay), self.target_bbox van la o
+                    # xanh CU. Neu lai servo bang diem ngoai suy nay trong
+                    # khi dead-zone lai tinh tren o xanh cu -> lech pha,
+                    # servo chay lo qua o xanh that. Chi cap nhat hien thi,
+                    # cho servo dung yen cho toi frame co detect that.
+                    self._set_output(True, self.target_bbox, self.target_bbox, pred, drive_servo=False)
             if self.target_bbox is not None:
                 self._run_exercise_tracking(frame, self.target_bbox, center=self.target_center)
             return

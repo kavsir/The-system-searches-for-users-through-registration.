@@ -107,7 +107,7 @@ CAMERAS = [
     {
         "id": "cam1",
         "room_name": "Phong 1",
-        "url": "http://10.208.229.178/stream",
+        "url": "http://10.208.229.179/stream",
     },
     {
         "id": "cam2",
@@ -235,18 +235,45 @@ SERVO_ENABLED_ROOMS = ["cam2"]
 
 SERVO_CONFIG = {
     "control": {
-        "kp_pan": 0.025,
-        "kp_tilt": 0.025,
-        "kd_pan": 0.015,
-        "kd_tilt": 0.010,
-        "ki_pan": 0.0008,
-        "ki_tilt": 0.0008,
-        "integral_limit_px": 300,
-        "error_filter_alpha": 0.35,
-        "dead_zone_hysteresis_factor": 1.6,
-        "dead_zone_px": 25,
-        "max_step_per_frame": 10,
-        "step_ramp_per_frame_deg": 0.5,
+        # --- Buoc di chuyen + nghi (khong con PID/tang toc nua) ---
+        # Buoc CO DINH moi lan servo di chuyen (do). Giam xuong (vd 1-2)
+        # neu muon cham/chac hon nua; tang len (vd 5) neu muon nhanh hon
+        # (nhung de mat on dinh hon).
+        "max_step_per_frame": 5,
+        # Buoc toi da RIENG cho tilt (ngan len/xuong). Theo yeu cau: ca
+        # pan va tilt deu quay CO DINH 5 do moi lan, khong phu thuoc
+        # khoang cach con lai toi o xanh.
+        "max_step_per_frame_tilt": 5,
+        # Thoi gian (giay) servo "khung" lai sau MOI lan di chuyen thuc su,
+        # cho camera vat ly xoay xong + AI kip xu ly ra frame moi phan anh
+        # dung vi tri hien tai truoc khi danh gia tiep. Day la phan chinh
+        # giup servo "cham ma chac", khong dao dong qua lai. Tang len (vd
+        # 0.3-0.5) neu van con dao dong; giam xuong (vd 0.15) neu thay
+        # phan hoi qua cham.
+        "post_move_settle_sec": 0.25,
+
+        # Ranh gioi dung: mac dinh DONG theo chinh o vuong xanh (bbox
+        # nguoi dang khoa) do ai_pipeline.py truyen len moi frame -- servo
+        # dung ngay khi tam khung hinh lot vao ben trong o xanh do.
+        # dead_zone_px chi con dung lam PHUONG AN DU PHONG khi khong co
+        # o xanh (vd dang scan/preempt).
+        "dead_zone_px": 70,
+        # San toi thieu cho ranh gioi dung DONG o tren -- tranh o xanh qua
+        # nho (nguoi o xa) khien servo rung/khong bao gio thuc su on dinh.
+        "min_dead_zone_px": 25,
+        # Bien do "cham" (px) cong them vao ranh gioi o xanh -- chi can tam
+        # khung hinh CHAM TOI MEP o xanh (hoac gan mep, trong khoang nay)
+        # la dung, KHONG can di vao han ben trong o xanh moi dung. Tang len
+        # neu muon dung tu xa hon nua; giam ve 0 neu muon dung dung luc lot
+        # han vao ben trong.
+        "touch_margin_px": 20,
+        # Nguong NHA KHOA (px) -- CONG THEM vao dead_zone khi truc DANG
+        # dung (settled) de quyet dinh khi nao moi coi la "roi khoi o
+        # xanh that su" va bat dau di chuyen lai. Cang lon thi servo cang
+        # "cung", it bi nhich theo nhung xe dich/rung nho sau khi da dung
+        # -- chi thuc su di chuyen lai khi muc tieu doi cho ro rang.
+        "release_margin_px": 90,
+
         "pan_min": 0,
         "pan_max": 180,
         "tilt_min": 30,
